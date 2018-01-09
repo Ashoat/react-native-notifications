@@ -378,6 +378,13 @@ RCT_EXPORT_MODULE()
 
 + (void)clearNotificationFromNotificationsCenter:(NSString *)notificationId
 {
+    if ([UNUserNotificationCenter class]) {
+        UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+        NSArray *identifiers = [NSArray arrayWithObjects:notificationId, nil];
+        [center removeDeliveredNotificationsWithIdentifiers:identifiers];
+        return;
+    }
+
     NSString* notificationKey = [self buildNotificationKeyfromNotification:notificationId];
     NSData* data = [[NSUserDefaults standardUserDefaults] objectForKey:notificationKey];
     if (data) {
