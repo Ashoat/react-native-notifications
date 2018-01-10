@@ -126,26 +126,8 @@ export default class NotificationsIOS {
   /**
    * Sets the notification categories
    */
-  static requestPermissions(categories: Array<NotificationCategory>) {
-    let notificationCategories = [];
-
-    if (categories) {
-      // subscribe once for all actions
-      _actionListener = NativeAppEventEmitter.addListener(DEVICE_NOTIFICATION_ACTION_RECEIVED, this._actionHandlerDispatcher.bind(this));
-
-      notificationCategories = categories.map(category => {
-        return Object.assign({}, category.options, {
-          actions: category.options.actions.map(action => {
-            // subscribe to action event
-            _actionHandlers.set(action.options.identifier, action.handler);
-
-            return action.options;
-          })
-        });
-      });
-    }
-
-    NativeRNNotifications.requestPermissionsWithCategories(notificationCategories);
+  static requestPermissions() {
+    NativeRNNotifications.requestPermissions();
   }
 
   /**

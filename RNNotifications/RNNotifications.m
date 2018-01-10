@@ -434,12 +434,29 @@ RCT_EXPORT_MODULE()
     return [result copy];
 }
 
-+ (void)requestPermissionsWithCategories:(NSMutableSet *)categories
++ (void)requestPermissions
 {
-    UIUserNotificationType types = (UIUserNotificationType) (UIUserNotificationTypeBadge | UIUserNotificationTypeSound | UIUserNotificationTypeAlert);
-    UIUserNotificationSettings* settings = [UIUserNotificationSettings settingsForTypes:types categories:categories];
-
-    [[UIApplication sharedApplication] registerUserNotificationSettings:settings];
+    UNUserNotificationCenter* center = [UNUserNotificationCenter currentNotificationCenter];
+    UNAuthorizationOptions options = UNAuthorizationOptionAlert + UNAuthorizationOptionSound + UNAuthorizationOptionBadge;
+    [center requestAuthorizationWithOptions:options completionHandler:^(BOOL granted, NSError * _Nullable error) {
+      if (!granted) {
+          NSDictionary *errorInfo;
+          if (error) {
+              errorInfo = @{@"code": [NSNumber numberWithInteger:error.code], @"domain": error.domain, @"localizedDescription": error.localizedDescription};
+          } else {
+              errorInfo = @{};
+          }
+          [[NSNotificationCenter defaultCenter] postNotificationName:RNNotificationsRegistrationFailed
+                                                              object:self
+                                                            userInfo:errorInfo];
+          return;
+      }
+      if ([UIApplication instancesRespondToSelector:@selector(registerForRemoteNotifications)]) {
+          dispatch_async(dispatch_get_main_queue(), ^{
+              [[UIApplication sharedApplication] registerForRemoteNotifications];
+          });
+      }
+    }];
 }
 
 + (void)emitNotificationActionForIdentifier:(NSString *)identifier responseInfo:(NSDictionary *)responseInfo userInfo:(NSDictionary *)userInfo  completionHandler:(void (^)())completionHandler
@@ -547,18 +564,9 @@ RCT_EXPORT_MODULE()
 /*
  * React Native exported methods
  */
-RCT_EXPORT_METHOD(requestPermissionsWithCategories:(NSArray *)json)
+RCT_EXPORT_METHOD(requestPermissions)
 {
-    NSMutableSet* categories = nil;
-
-    if ([json count] > 0) {
-        categories = [NSMutableSet new];
-        for (NSDictionary* categoryJson in json) {
-            [categories addObject:[RCTConvert UIMutableUserNotificationCategory:categoryJson]];
-        }
-    }
-
-    [RNNotifications requestPermissionsWithCategories:categories];
+    [RNNotifications requestPermissions];
 }
 
 RCT_EXPORT_METHOD(log:(NSString *)message)
