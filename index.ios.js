@@ -48,6 +48,13 @@ export class NotificationCategory {
 }
 
 export default class NotificationsIOS {
+
+  static FetchResult = {
+    NewData: 'UIBackgroundFetchResultNewData',
+    NoData: 'UIBackgroundFetchResultNoData',
+    ResultFailed: 'UIBackgroundFetchResultFailed',
+  };
+
   /**
    * Attaches a listener to remote notification events while the app is running
    * in the foreground or the background.
@@ -111,7 +118,7 @@ export default class NotificationsIOS {
       action.notification = new IOSNotification(action.notification);
 
       actionHandler(action, () => {
-        NativeRNNotifications.completionHandler(action.completionKey);
+        NativeRNNotifications.completeAction(action.completionKey);
       });
     }
   }

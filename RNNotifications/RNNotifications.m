@@ -93,6 +93,7 @@ RCT_ENUM_CONVERTER(UIUserNotificationActionBehavior, (@{
 @end
 
 @implementation RCTConvert (UILocalNotification)
+
 + (UILocalNotification *)UILocalNotification:(id)json
 {
     NSDictionary<NSString *, id> *details = [self NSDictionary:json];
@@ -111,6 +112,13 @@ RCT_ENUM_CONVERTER(UIUserNotificationActionBehavior, (@{
 
     return notification;
 }
+
+RCT_ENUM_CONVERTER(UIBackgroundFetchResult, (@{
+  @"UIBackgroundFetchResultNewData": @(UIBackgroundFetchResultNewData),
+  @"UIBackgroundFetchResultNoData": @(UIBackgroundFetchResultNoData),
+  @"UIBackgroundFetchResultFailed": @(UIBackgroundFetchResultFailed),
+}), UIBackgroundFetchResultNoData, integerValue)
+
 @end
 
 @implementation RCTConvert (UNNotificationRequest)
@@ -170,6 +178,10 @@ static NSDictionary *RCTFormatUNNotification(UNNotification *notification)
 
   return formattedNotification;
 }
+
+@interface RNNotifications ()
+@property (nonatomic, strong) NSMutableDictionary *remoteNotificationCallbacks;
+@end
 
 @implementation RNNotifications
 
@@ -250,7 +262,9 @@ RCT_EXPORT_MODULE()
 }
 
 + (void)didReceiveRemoteNotification:(NSDictionary *)notification
+              fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler
 {
+    NSDictionary *notifInfo = @{@"notification": notification, @"completionHandler": completionHandler};
     UIApplicationState state = [UIApplication sharedApplication].applicationState;
 
     if ([RNNotificationsBridgeQueue sharedInstance].jsIsReady == YES) {
@@ -258,17 +272,17 @@ RCT_EXPORT_MODULE()
 
         if (state == UIApplicationStateActive) {
             // Notification received foreground
-            [self didReceiveNotificationOnForegroundState:notification];
+            [self didReceiveNotificationOnForegroundState:notifInfo];
         } else if (state == UIApplicationStateInactive) {
             // Notification opened
-            [self didNotificationOpen:notification];
+            [self didNotificationOpen:notifInfo];
         } else {
             // Notification received background
-            [self didReceiveNotificationOnBackgroundState:notification];
+            [self didReceiveNotificationOnBackgroundState:notifInfo];
         }
     } else {
         // JS thread is not ready - store it in the native notifications queue
-        [[RNNotificationsBridgeQueue sharedInstance] postNotification:notification];
+        [[RNNotificationsBridgeQueue sharedInstance] postNotification:notifInfo];
     }
 }
 
@@ -280,14 +294,15 @@ RCT_EXPORT_MODULE()
     [newUserInfo removeObjectForKey:@"__id"];
     notification.userInfo = newUserInfo;
 
+    NSDictionary *notifInfo = @{@"notification": notification.userInfo};
     if (state == UIApplicationStateActive) {
-        [self didReceiveNotificationOnForegroundState:notification.userInfo];
+        [self didReceiveNotificationOnForegroundState:notifInfo];
     } else if (state == UIApplicationStateInactive) {
         NSString* notificationId = [notification.userInfo objectForKey:@"notificationId"];
         if (notificationId) {
             [self clearNotificationFromNotificationsCenter:notificationId];
         }
-        [self didNotificationOpen:notification.userInfo];
+        [self didNotificationOpen:notifInfo];
     }
 }
 
@@ -304,15 +319,17 @@ RCT_EXPORT_MODULE()
 /*
  * Notification handlers
  */
-+ (void)didReceiveNotificationOnForegroundState:(NSDictionary *)notification
++ (void)didReceiveNotificationOnForegroundState:(NSDictionary *)notifInfo
 {
     [[NSNotificationCenter defaultCenter] postNotificationName:RNNotificationReceivedForeground
                                                         object:self
-                                                      userInfo:notification];
+                                                      userInfo:notifInfo];
 }
 
-+ (void)didReceiveNotificationOnBackgroundState:(NSDictionary *)notification
++ (void)didReceiveNotificationOnBackgroundState:(NSDictionary *)notifInfo
 {
+    NSDictionary* notification = notifInfo[@"notification"];
+
     NSDictionary* managedAps  = [notification objectForKey:@"managedAps"];
     NSDictionary* alert = [managedAps objectForKey:@"alert"];
     NSString* action = [managedAps objectForKey:@"action"];
@@ -332,14 +349,14 @@ RCT_EXPORT_MODULE()
 
     [[NSNotificationCenter defaultCenter] postNotificationName:RNNotificationReceivedBackground
                                                         object:self
-                                                      userInfo:notification];
+                                                      userInfo:notifInfo];
 }
 
-+ (void)didNotificationOpen:(NSDictionary *)notification
++ (void)didNotificationOpen:(NSDictionary *)notifInfo
 {
     [[NSNotificationCenter defaultCenter] postNotificationName:RNNotificationOpened
                                                         object:self
-                                                      userInfo:notification];
+                                                      userInfo:notifInfo];
 }
 
 /*
@@ -470,7 +487,7 @@ RCT_EXPORT_MODULE()
 
 - (void)pushRegistry:(PKPushRegistry *)registry didReceiveIncomingPushWithPayload:(PKPushPayload *)payload forType:(NSString *)type
 {
-    [RNNotifications didReceiveRemoteNotification:payload.dictionaryPayload];
+    [RNNotifications didReceiveRemoteNotification:payload.dictionaryPayload fetchCompletionHandler:nil];
 }
 
 /*
@@ -491,19 +508,35 @@ RCT_EXPORT_MODULE()
     [_bridge.eventDispatcher sendDeviceEventWithName:@"pushKitRegistered" body:notification.userInfo];
 }
 
-- (void)handleNotificationReceivedForeground:(NSNotification *)notification
+- (void)handleNotifInfo:(NSDictionary *)notifInfo withName:(NSString *)name
 {
-    [_bridge.eventDispatcher sendDeviceEventWithName:@"notificationReceivedForeground" body:notification.userInfo];
+    NSDictionary *notification = notifInfo[@"notification"];
+    RCTRemoteNotificationCallback completionHandler = notifInfo[@"completionHandler"];
+    if (completionHandler) {
+        if (!self.remoteNotificationCallbacks) {
+            // Lazy initialization
+            self.remoteNotificationCallbacks = [NSMutableDictionary dictionary];
+        }
+        // TODO breakpoint here to see what we should use for key
+        NSString *tmp = @"test";
+        self.remoteNotificationCallbacks[tmp] = completionHandler;
+    }
+    [_bridge.eventDispatcher sendDeviceEventWithName:name body:notification];
 }
 
-- (void)handleNotificationReceivedBackground:(NSNotification *)notification
+- (void)handleNotificationReceivedForeground:(NSNotification *)sysNotif
 {
-    [_bridge.eventDispatcher sendDeviceEventWithName:@"notificationReceivedBackground" body:notification.userInfo];
+    [self handleNotifInfo:sysNotif.userInfo withName:@"notificationReceivedForeground"];
 }
 
-- (void)handleNotificationOpened:(NSNotification *)notification
+- (void)handleNotificationReceivedBackground:(NSNotification *)sysNotif
 {
-    [_bridge.eventDispatcher sendDeviceEventWithName:@"notificationOpened" body:notification.userInfo];
+    [self handleNotifInfo:sysNotif.userInfo withName:@"notificationReceivedBackground"];
+}
+
+- (void)handleNotificationOpened:(NSNotification *)sysNotif
+{
+    [self handleNotifInfo:sysNotif.userInfo withName:@"notificationOpened"];
 }
 
 - (void)handleNotificationActionTriggered:(NSNotification *)notification
@@ -533,9 +566,20 @@ RCT_EXPORT_METHOD(log:(NSString *)message)
     NSLog(message);
 }
 
-RCT_EXPORT_METHOD(completionHandler:(NSString *)completionKey)
+RCT_EXPORT_METHOD(completeAction:(NSString *)completionKey)
 {
     [[RNNotificationsBridgeQueue sharedInstance] completeAction:completionKey];
+}
+
+RCT_EXPORT_METHOD(completeNotif:(NSString *)completionKey fetchResult:(UIBackgroundFetchResult)result)
+{
+  RCTRemoteNotificationCallback completionHandler = self.remoteNotificationCallbacks[completionKey];
+  if (!completionHandler) {
+    NSLog(@"There is no completion handler with key: %@", completionKey);
+    return;
+  }
+  completionHandler(result);
+  [self.remoteNotificationCallbacks removeObjectForKey:completionKey];
 }
 
 RCT_EXPORT_METHOD(abandonPermissions)
@@ -572,22 +616,26 @@ RCT_EXPORT_METHOD(consumeBackgroundQueue)
     }];
 
     // Push background notifications to JS
-    [[RNNotificationsBridgeQueue sharedInstance] consumeNotificationsQueue:^(NSDictionary* notification) {
-        [RNNotifications didReceiveRemoteNotification:notification];
+    [[RNNotificationsBridgeQueue sharedInstance] consumeNotificationsQueue:^(NSDictionary* notifInfo) {
+        NSDictionary *notification = notifInfo[@"notification"];
+        RCTRemoteNotificationCallback completionHandler = notifInfo[@"completionHandler"];
+        [RNNotifications didReceiveRemoteNotification:notification fetchCompletionHandler:completionHandler];
     }];
 
     // Push opened local notifications
     NSDictionary* openedLocalNotification = [RNNotificationsBridgeQueue sharedInstance].openedLocalNotification;
     if (openedLocalNotification) {
         [RNNotificationsBridgeQueue sharedInstance].openedLocalNotification = nil;
-        [RNNotifications didNotificationOpen:openedLocalNotification];
+        NSDictionary *notifInfo = @{@"notification": openedLocalNotification};
+        [RNNotifications didNotificationOpen:notifInfo];
     }
 
     // Push opened remote notifications
     NSDictionary* openedRemoteNotification = [RNNotificationsBridgeQueue sharedInstance].openedRemoteNotification;
     if (openedRemoteNotification) {
         [RNNotificationsBridgeQueue sharedInstance].openedRemoteNotification = nil;
-        [RNNotifications didNotificationOpen:openedRemoteNotification];
+        NSDictionary *notifInfo = @{@"notification": openedRemoteNotification};
+        [RNNotifications didNotificationOpen:notifInfo];
     }
 }
 

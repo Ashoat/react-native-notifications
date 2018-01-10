@@ -26,28 +26,28 @@ NSMutableDictionary* actionCompletionHandlers;
     return self;
 }
 
-- (void)postNotification:(NSDictionary *)notification
+- (void)postNotification:(NSDictionary *)notifInfo
 {
     if (!notificationsQueue) return;
-    [notificationsQueue insertObject:notification atIndex:0];
+    [notificationsQueue insertObject:notifInfo atIndex:0];
 }
 
 - (NSDictionary *)dequeueSingleNotification
 {
     if (!notificationsQueue || notificationsQueue.count == 0) return nil;
 
-    NSDictionary* notification = [notificationsQueue lastObject];
+    NSDictionary* notifInfo = [notificationsQueue lastObject];
     [notificationsQueue removeLastObject];
 
-    return notification;
+    return notifInfo;
 }
 
 - (void)consumeNotificationsQueue:(void (^)(NSDictionary *))block
 {
-    NSDictionary* notification;
+    NSDictionary* notifInfo;
 
-    while ((notification = [self dequeueSingleNotification]) != nil) {
-        block(notification);
+    while ((notifInfo = [self dequeueSingleNotification]) != nil) {
+        block(notifInfo);
     }
 
     notificationsQueue = nil;

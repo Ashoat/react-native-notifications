@@ -9,7 +9,7 @@
 + (nonnull instancetype)sharedInstance;
 
 - (void)postAction:(NSDictionary *)action withCompletionKey:(NSString *)completionKey andCompletionHandler:(void (^)())completionHandler;
-- (void)postNotification:(NSDictionary *)notification;
+- (void)postNotification:(NSDictionary *)notifInfo;
 
 - (void)consumeActionsQueue:(void (^)(NSDictionary *))block;
 - (void)consumeNotificationsQueue:(void (^)(NSDictionary *))block;

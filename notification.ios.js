@@ -1,14 +1,22 @@
+import { NativeModules } from "react-native";
+
+const NativeRNNotifications = NativeModules.RNNotifications; // eslint-disable-line no-unused-vars
+
 export default class IOSNotification {
   _data: Object;
-  _alert: string | Object;
-  _sound: string;
-  _badge: number;
-  _category: string;
-  _type: string; // regular / managed
-  _thread: string;
+  _alert: string | Object | null | undefined;
+  _sound: ?string;
+  _badge: ?number;
+  _category: ?string;
+  _type: ?string; // regular / managed
+  _thread: ?string;
+  _id: ?string;
+  _remoteNotificationCompleteCallbackCalled: boolean;
 
   constructor(notification: Object) {
     this._data = {};
+    this._id = notification.id;
+    this._remoteNotificationCompleteCallbackCalled = false;
 
     if (notification.aps &&
       notification.aps["content-available"] &&
@@ -66,5 +74,14 @@ export default class IOSNotification {
 
   getThread(): ?string {
     return this._thread;
+  }
+
+  finish(fetchResult: string) {
+    if (!this._id || this._remoteNotificationCompleteCallbackCalled) {
+      return;
+    }
+    this._remoteNotificationCompleteCallbackCalled = true;
+
+    NativeRNNotifications.completeNotif(this._id, fetchResult);
   }
 }
