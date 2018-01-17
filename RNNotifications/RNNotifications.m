@@ -528,13 +528,14 @@ RCT_EXPORT_MODULE()
 - (void)handleNotifInfo:(NSDictionary *)notifInfo withName:(NSString *)name
 {
     NSDictionary *notification = notifInfo[@"notification"];
+    NSString *notifID = notification[@"id"];
     RCTRemoteNotificationCallback completionHandler = notifInfo[@"completionHandler"];
-    if (completionHandler) {
+    if (completionHandler && notifID) {
         if (!self.remoteNotificationCallbacks) {
             // Lazy initialization
             self.remoteNotificationCallbacks = [NSMutableDictionary dictionary];
         }
-        self.remoteNotificationCallbacks[notification[@"id"]] = completionHandler;
+        self.remoteNotificationCallbacks[notifID] = completionHandler;
     }
     [_bridge.eventDispatcher sendDeviceEventWithName:name body:notification];
 }
