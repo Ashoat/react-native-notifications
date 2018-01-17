@@ -534,9 +534,7 @@ RCT_EXPORT_MODULE()
             // Lazy initialization
             self.remoteNotificationCallbacks = [NSMutableDictionary dictionary];
         }
-        // TODO breakpoint here to see what we should use for key
-        NSString *tmp = @"test";
-        self.remoteNotificationCallbacks[tmp] = completionHandler;
+        self.remoteNotificationCallbacks[notification[@"id"]] = completionHandler;
     }
     [_bridge.eventDispatcher sendDeviceEventWithName:name body:notification];
 }
