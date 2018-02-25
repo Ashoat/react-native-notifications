@@ -173,6 +173,15 @@ export default class NotificationsIOS {
     NativeRNNotifications.log(message);
   }
 
+  static async getInitialNotification() {
+    const notification = await NativeRNNotifications.getInitialNotification();
+    if (notification) {
+      return new IOSNotification(notification);
+    } else {
+      return undefined;
+    }
+  }
+
   /**
    * Presenting local notification
    *

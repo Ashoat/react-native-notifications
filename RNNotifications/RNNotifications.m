@@ -570,6 +570,14 @@ RCT_EXPORT_METHOD(requestPermissions)
     [RNNotifications requestPermissions];
 }
 
+RCT_EXPORT_METHOD(getInitialNotification:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+    NSDictionary * notification = nil;
+    notification = [RNNotificationsBridgeQueue sharedInstance].openedRemoteNotification;
+    [RNNotificationsBridgeQueue sharedInstance].openedRemoteNotification = nil;
+    resolve(notification);
+}
+
 RCT_EXPORT_METHOD(log:(NSString *)message)
 {
     NSLog(message);
