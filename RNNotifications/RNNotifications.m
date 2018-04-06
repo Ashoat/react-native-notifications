@@ -300,7 +300,7 @@ RCT_EXPORT_MODULE()
     } else if (state == UIApplicationStateInactive) {
         NSString* notificationId = [notification.userInfo objectForKey:@"notificationId"];
         if (notificationId) {
-            [self clearNotificationFromNotificationsCenter:notificationId];
+            [self clearNotificationFromNotificationsCenter:notificationId completionHandler:nil];
         }
         [self didNotificationOpen:notifInfo];
     }
@@ -343,7 +343,7 @@ RCT_EXPORT_MODULE()
             [self dispatchLocalNotificationFromNotification:notification];
 
         } else if ([action isEqualToString: RNNotificationClearAction] && notificationId) {
-            [self clearNotificationFromNotificationsCenter:notificationId];
+            [self clearNotificationFromNotificationsCenter:notificationId completionHandler:notifInfo[@"completionHandler"]];
         }
     }
 
@@ -394,11 +394,20 @@ RCT_EXPORT_MODULE()
 }
 
 + (void)clearNotificationFromNotificationsCenter:(NSString *)notificationId
+                               completionHandler:(void (^)())completionHandler
 {
     if ([UNUserNotificationCenter class]) {
-        UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
-        NSArray *identifiers = [NSArray arrayWithObjects:notificationId, nil];
-        [center removeDeliveredNotificationsWithIdentifiers:identifiers];
+        if (completionHandler) {
+            completionHandler();
+        }
+        [[UNUserNotificationCenter currentNotificationCenter] getDeliveredNotificationsWithCompletionHandler:^(NSArray<UNNotification *> * _Nonnull notifications) {
+            for (UNNotification *notif in notifications) {
+                if ([notificationId isEqual:notif.request.content.userInfo[@"id"]]) {
+                    NSArray *identifiers = [NSArray arrayWithObjects:notif.request.identifier, nil];
+                    [[UNUserNotificationCenter currentNotificationCenter] removeDeliveredNotificationsWithIdentifiers:identifiers];
+                }
+            }
+        }];
         return;
     }
 
